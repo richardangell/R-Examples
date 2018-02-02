@@ -1,0 +1,75 @@
+---
+title: "Glm-Important-Variables"
+output: github_document
+---
+
+This notebook shows how standardising variables when building regression models results in **standardised coefficients** which are independant of the scales of the predictors. This allows the use of regression coefficients as a general measure of variable importance in the model. 
+
+## Start h2o
+
+```{r setup, include = TRUE}
+suppressMessages(library(h2o))
+h2o.init()
+h2o.no_progress()
+```
+
+## Upload data to h2o
+
+First upload the prostate dataset from the h2o package to the h2o instance.
+
+```{r load_data}
+prostate.hex = h2o.uploadFile(path = system.file("extdata", "prostate.csv",
+                                                 package = "h2o"),
+                               destination_frame = "prostate.hex")
+```
+
+Add another age column where the units are in days. We will build a model using each age variable.
+
+```{r}
+prostate.hex["AGE_DAYS"] = prostate.hex["AGE"] * 365
+prostate.hex
+```
+
+## Build two penalised regression model
+
+We are specifying the `standardize = TRUE` option to standardise numeric variables to have zero mean and unit variance (note it is set to `TRUE` by default). See [h2o docs](http://docs.h2o.ai/h2o/latest-stable/h2o-docs/data-science/algo-params/standardize.html) for more info.
+
+Build the first model using age in years.
+
+```{r build_glm}
+explanatory_cols <- c("AGE", "RACE", "DPROS", "DCAPS", "PSA", "VOL", "GLEASON")
+h2o_glm <- h2o.glm(x = explanatory_cols,
+                   y = "CAPSULE",
+                   training_frame = prostate.hex,
+                   lambda_search = TRUE,
+                   alpha = 1,
+                   standardize = TRUE)
+```
+
+```{r show_model}
+h2o_glm
+```
+
+Now build the model using age in days.
+
+```{r build_glm2}
+explanatory_cols <- c("AGE_DAYS", "RACE", "DPROS", "DCAPS", "PSA", "VOL", "GLEASON")
+h2o_glm2 <- h2o.glm(x = explanatory_cols,
+                    y = "CAPSULE",
+                    training_frame = prostate.hex,
+                    lambda_search = TRUE,
+                    alpha = 1,
+                    standardize = TRUE)
+```
+
+```{r show_model2}
+h2o_glm2
+```
+
+We see that the standardised coefficients are the same (to several dp) for all variables including age where the scale has changed. For the non-standardised coefficients this is not the case.
+
+## Package info
+
+```{r record_pkg_info}
+sessionInfo()
+```
