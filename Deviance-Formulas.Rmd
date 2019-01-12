@@ -1,0 +1,201 @@
+---
+title: "Deviance-Formulas"
+output: github_document
+---
+
+This notebook shows the deviance formula for several different distributions.
+
+# Load data
+
+Load the dataCar dataset from the insuranceData package. This will provide a dataset we can use to build both a poisson and gamma glm.
+
+```{r setup, include = TRUE}
+library(insuranceData)
+data(dataCar)
+```
+
+```{r}
+head(dataCar)
+```
+
+# Poisson deviance
+
+Add the log of the exposure (period of cover) to the data, so it can be used as an offset in a poisson glm to model claims frequency (i.e. # claims per exposure).
+
+```{r}
+dataCar$log_exposure <- log(dataCar$exposure)
+```
+
+## Claims frequency model
+
+This models number of claims per exposure, where exposure is different for each records.
+
+```{r}
+frequency_model <- glm(formula = numclaims ~ veh_body + veh_age + gender + area + agecat + offset(log_exposure),
+                       family = poisson(link = log),
+                       data = dataCar)
+```
+
+```{r}
+frequency_model
+```
+
+## Claims models
+
+This model predict number of claims, note each record has the same exposure.
+
+```{r}
+claims_model <- glm(formula = numclaims ~ veh_body + veh_age + gender + area + agecat,
+                    family = poisson(link = log),
+                    data = dataCar)
+```
+
+```{r}
+claims_model
+```
+
+## Poisson deviance formula
+
+Deviance formulas can be found here;  http://docs.h2o.ai/h2o/latest-stable/h2o-docs/data-science/glm.html. Note that h2o multiplies the deviance by -1.
+
+```{r}
+poisson_deviance <- function(y, p) {
+  
+  d <- 2 * ifelse(y == 0, -(y - p), (y * log(y / p)) - (y - p))
+  
+  dev <- sum(d)
+  
+  return(dev)
+  
+}
+```
+
+## Compare to results from glm()
+
+### Claims frequecny model
+
+```{r}
+poisson_deviance(dataCar$numclaims, frequency_model$fitted.values)
+```
+
+```{r}
+frequency_model$deviance
+```
+
+```{r}
+poisson_deviance(dataCar$numclaims, 
+                 dataCar$exposure * sum(dataCar$numclaims) / sum(dataCar$exposure))
+```
+
+
+```{r}
+frequency_model$null.deviance
+```
+
+### Claims count model
+
+```{r}
+poisson_deviance(dataCar$numclaims, claims_model$fitted.values)
+```
+
+```{r}
+claims_model$deviance
+```
+
+```{r}
+poisson_deviance(dataCar$numclaims, 
+                 sum(dataCar$numclaims) / length(dataCar$numclaims))
+```
+
+```{r}
+claims_model$null.deviance
+```
+
+# Gamma deviance
+
+Add the average claims cost that can be used as the response in a claims cost model.
+
+```{r}
+dataCar$average_claimcst0 <- dataCar$claimcst0 / dataCar$numclaims
+```
+
+## Claims severity model
+
+This models cost (severity) of a claim.
+
+```{r}
+severity_model <- glm(formula = average_claimcst0 ~ veh_body + veh_age + gender + area + agecat,
+                      family = Gamma(link = log),
+                      data = dataCar,
+                      weights = dataCar$numclaims)
+```
+
+```{r}
+severity_model
+```
+
+## Gamma deviance formula
+
+Deviance formulas can be found here;  http://docs.h2o.ai/h2o/latest-stable/h2o-docs/data-science/glm.html. 
+
+```{r}
+gamma_deviance <- function(y, p, w) {
+  
+  d <- 2 * w * (-log(y / p) + ((y - p) / p))
+
+  dev <- sum(d)
+  
+  return(dev)
+  
+}
+```
+
+## Compare to results from glm()
+
+Note the model excludes records with no claims so these are excluded when calculating the deviance.
+
+```{r}
+clms <- dataCar$numclaims > 0
+```
+
+```{r}
+gamma_deviance(y = dataCar$average_claimcst0[clms], 
+               p = severity_model$fitted.values,
+               w = dataCar$numclaims[clms])
+```
+
+```{r}
+severity_model$deviance
+```
+
+```{r}
+gamma_deviance(y = dataCar$average_claimcst0[clms], 
+               p = sum(dataCar$average_claimcst0[clms] * dataCar$numclaims[clms]) / sum(dataCar$numclaims[clms]),
+               w = dataCar$numclaims[clms])
+```
+
+```{r}
+severity_model$null.deviance
+```
+
+# Package info
+
+```{r record_pkg_info}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
